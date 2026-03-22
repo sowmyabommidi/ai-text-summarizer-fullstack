@@ -5,12 +5,24 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Update: You can leave this as app.use(cors()) for now to make testing easier,
+// but for production, it's safer to specify your Vercel URL.
+app.use(cors()); 
+
 app.use(express.json());
+
+// Health check route (Optional but helpful for Render to know your app is alive)
+app.get("/", (req, res) => res.send("Summarizer API is running!"));
 
 app.post("/api/summarize", async (req, res) => {
   try {
     const { text } = req.body;
+
+    // Safety check
+    if (!text) {
+      return res.status(400).json({ error: "No text provided" });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -24,7 +36,6 @@ app.post("/api/summarize", async (req, res) => {
           {
             role: "user",
             content: `Return ONLY JSON:
-
 {
  "summary": "",
  "keyPoints": ["", "", ""],
@@ -39,23 +50,27 @@ ${text}`
     });
 
     const data = await response.json();
-
     console.log("OpenRouter output:", data);
 
-    let output = data.choices[0].message.content;
+    // Error handling if OpenRouter fails
+    if (!data.choices || !data.choices[0]) {
+        return res.status(500).json({ error: "AI Service Error" });
+    }
 
+    let output = data.choices[0].message.content;
     output = output.replace(/```json/g, "").replace(/```/g, "").trim();
 
     const parsed = JSON.parse(output);
-
     res.json(parsed);
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed" });
+    console.error("Backend Error:", error);
+    res.status(500).json({ error: "Failed to process text" });
   }
 });
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+// CRITICAL CHANGE: Use process.env.PORT for Render
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
