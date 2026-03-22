@@ -35,9 +35,11 @@ app.post("/api/summarize", async (req, res) => {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
+  "Authorization": `Bearer ${apiKey}`,
+  "Content-Type": "application/json",
+  "HTTP-Referer": "https://ai-text-summarizer-fullstack.onrender.com",
+  "X-Title": "AI Text Summarizer"
+},
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
         messages: [
