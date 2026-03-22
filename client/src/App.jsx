@@ -5,12 +5,10 @@ function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // STEP 1: Replace the URL below with your actual Render URL
-  // Example: "https://ai-summarizer-backend.onrender.com/api/summarize"
   const API_URL = "https://ai-text-summarizer-fullstack.onrender.com/api/summarize";
 
   const handleSubmit = async () => {
-    if (!text) return alert("Please paste some text first!");
+    if (!text.trim()) return alert("Please paste some text first!");
     setLoading(true);
 
     try {
@@ -22,18 +20,25 @@ function App() {
         body: JSON.stringify({ text })
       });
 
-      // Check if the response is okay
-      if (!res.ok) {
-        throw new Error("Failed to connect to the server");
-      }
+      if (!res.ok) throw new Error("Failed to connect to the server");
 
       const data = await res.json();
-      console.log("Response Data:", data); // debug
+      console.log("API Response:", data);
 
-      setResult(data);
+      // Ensure result is always an object with safe defaults
+      setResult({
+        summary: typeof data.summary === "string" ? data.summary : "",
+        keyPoints: Array.isArray(data.keyPoints) ? data.keyPoints : [],
+        sentiment: typeof data.sentiment === "string" ? data.sentiment : ""
+      });
     } catch (error) {
       console.error("Error:", error);
-      alert("Make sure your backend is running and CORS is enabled!");
+      alert("Error fetching summary. Make sure your backend is running and CORS is enabled!");
+      setResult({
+        summary: "",
+        keyPoints: [],
+        sentiment: ""
+      });
     }
 
     setLoading(false);
@@ -53,16 +58,16 @@ function App() {
 
       <br /><br />
 
-      <button 
-        onClick={handleSubmit} 
+      <button
+        onClick={handleSubmit}
         disabled={loading}
-        style={{ 
-          padding: "10px 20px", 
-          backgroundColor: loading ? "#ccc" : "#007bff", 
-          color: "white", 
-          border: "none", 
+        style={{
+          padding: "10px 20px",
+          backgroundColor: loading ? "#ccc" : "#007bff",
+          color: "white",
+          border: "none",
           borderRadius: "5px",
-          cursor: "pointer" 
+          cursor: "pointer"
         }}
       >
         {loading ? "Analyzing..." : "Summarize"}
@@ -71,21 +76,19 @@ function App() {
       {result && (
         <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#f9f9f9", borderRadius: "8px" }}>
           <h3 style={{ borderBottom: "1px solid #ddd" }}>Summary</h3>
-          <p>{result?.summary || "No summary available"}</p>
+          <p>{result.summary || "No summary available"}</p>
 
           <h3 style={{ borderBottom: "1px solid #ddd" }}>Key Points</h3>
           <ul>
-            {result?.keyPoints?.length ? (
-              result.keyPoints.map((point, i) => (
-                <li key={i}>{point}</li>
-              ))
+            {result.keyPoints.length > 0 ? (
+              result.keyPoints.map((point, i) => <li key={i}>{point}</li>)
             ) : (
               <li>No key points available</li>
             )}
           </ul>
 
           <h3 style={{ borderBottom: "1px solid #ddd" }}>Sentiment</h3>
-          <p><strong>{result?.sentiment || "No sentiment available"}</strong></p>
+          <p><strong>{result.sentiment || "No sentiment available"}</strong></p>
         </div>
       )}
     </div>

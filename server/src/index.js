@@ -1,21 +1,22 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import fetch from "node-fetch"; // make sure node-fetch is installed for fetch support in Node
 
 dotenv.config();
 
 const app = express();
 
-// 1. Updated CORS: This is more robust for Vercel -> Render communication
+// 1. Robust CORS setup
 app.use(cors({
-  origin: "*", // Allows your Vercel frontend to access this API
+  origin: "*", // Allow all origins; change to your frontend URL in production
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
 
-// 2. Health check route (Confirms the backend is awake)
+// 2. Health check route
 app.get("/", (req, res) => res.send("Summarizer API is running!"));
 
 // 3. Main Summarize Route
@@ -23,10 +24,11 @@ app.post("/api/summarize", async (req, res) => {
   try {
     const { text } = req.body;
 
-    if (!text) {
-      return res.status(400).json({ error: "No text provided" });
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ error: "No valid text provided" });
     }
 
+    // 3a. Call OpenRouter AI
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -38,9 +40,13 @@ app.post("/api/summarize", async (req, res) => {
         messages: [
           {
             role: "user",
-            content: `Return ONLY a valid JSON object with these keys: "summary" (string), "keyPoints" (array of strings), and "sentiment" (string). Do not include markdown formatting or backticks.
-            
-            Text: ${text}`
+            content: `
+Return ONLY a JSON object with keys: 
+"summary" (string), "keyPoints" (array of strings), "sentiment" (string). 
+Do NOT include markdown or backticks.
+
+Text: ${text}
+`
           }
         ]
       })
@@ -48,32 +54,45 @@ app.post("/api/summarize", async (req, res) => {
 
     const data = await response.json();
 
-    // Handle OpenRouter errors (like invalid API keys or quota limits)
-    if (!data.choices || data.choices.length === 0) {
+    // 3b. Handle AI errors
+    if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
       console.error("OpenRouter Error:", data);
       return res.status(500).json({ error: "AI Service failed to respond" });
     }
 
-    let output = data.choices[0].message.content;
+    let output = data.choices[0].message?.content || "";
 
-    // Remove markdown code blocks if the AI accidentally includes them
+    // Remove markdown code blocks if included
     output = output.replace(/```json/g, "").replace(/```/g, "").trim();
 
+    // 3c. Safely parse AI output
     try {
       const parsed = JSON.parse(output);
-      res.json(parsed);
+
+      // Ensure the structure is safe for frontend
+      res.json({
+        summary: typeof parsed.summary === "string" ? parsed.summary : "",
+        keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+        sentiment: typeof parsed.sentiment === "string" ? parsed.sentiment : ""
+      });
     } catch (parseError) {
-      console.error("JSON Parse Error:", output);
-      res.status(500).json({ error: "AI returned invalid JSON format" });
+      console.error("JSON Parse Error:", output, parseError);
+      res.status(500).json({ 
+        error: "AI returned invalid JSON format", 
+        fallback: { summary: "", keyPoints: [], sentiment: "" } 
+      });
     }
 
   } catch (error) {
     console.error("Backend Server Error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      fallback: { summary: "", keyPoints: [], sentiment: "" } 
+    });
   }
 });
 
-// 4. Use process.env.PORT for Render deployment
+// 4. Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
