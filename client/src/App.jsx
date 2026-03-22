@@ -7,7 +7,7 @@ function App() {
 
   // STEP 1: Replace the URL below with your actual Render URL
   // Example: "https://ai-summarizer-backend.onrender.com/api/summarize"
-  const API_URL = "https://your-backend-name.onrender.com/api/summarize";
+  const API_URL = "https://ai-text-summarizer-fullstack.onrender.com/";
 
   const handleSubmit = async () => {
     if (!text) return alert("Please paste some text first!");
