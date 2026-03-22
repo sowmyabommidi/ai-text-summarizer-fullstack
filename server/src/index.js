@@ -10,7 +10,7 @@ const app = express();
 
 // ✅ Store API key in a variable for easy use
 const apiKey = process.env.OPENROUTER_API_KEY;
-
+console.log("API key loaded:", !!apiKey);
 app.use(cors({
   origin: "*", // Allow all origins; change to your frontend URL in production
   methods: ["GET", "POST"],
