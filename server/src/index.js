@@ -6,20 +6,23 @@ dotenv.config();
 
 const app = express();
 
-// Update: You can leave this as app.use(cors()) for now to make testing easier,
-// but for production, it's safer to specify your Vercel URL.
-app.use(cors()); 
+// 1. Updated CORS: This is more robust for Vercel -> Render communication
+app.use(cors({
+  origin: "*", // Allows your Vercel frontend to access this API
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 app.use(express.json());
 
-// Health check route (Optional but helpful for Render to know your app is alive)
+// 2. Health check route (Confirms the backend is awake)
 app.get("/", (req, res) => res.send("Summarizer API is running!"));
 
+// 3. Main Summarize Route
 app.post("/api/summarize", async (req, res) => {
   try {
     const { text } = req.body;
 
-    // Safety check
     if (!text) {
       return res.status(400).json({ error: "No text provided" });
     }
@@ -35,42 +38,43 @@ app.post("/api/summarize", async (req, res) => {
         messages: [
           {
             role: "user",
-            content: `Return ONLY JSON:
-{
- "summary": "",
- "keyPoints": ["", "", ""],
- "sentiment": ""
-}
-
-Text:
-${text}`
+            content: `Return ONLY a valid JSON object with these keys: "summary" (string), "keyPoints" (array of strings), and "sentiment" (string). Do not include markdown formatting or backticks.
+            
+            Text: ${text}`
           }
         ]
       })
     });
 
     const data = await response.json();
-    console.log("OpenRouter output:", data);
 
-    // Error handling if OpenRouter fails
-    if (!data.choices || !data.choices[0]) {
-        return res.status(500).json({ error: "AI Service Error" });
+    // Handle OpenRouter errors (like invalid API keys or quota limits)
+    if (!data.choices || data.choices.length === 0) {
+      console.error("OpenRouter Error:", data);
+      return res.status(500).json({ error: "AI Service failed to respond" });
     }
 
     let output = data.choices[0].message.content;
+
+    // Remove markdown code blocks if the AI accidentally includes them
     output = output.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    const parsed = JSON.parse(output);
-    res.json(parsed);
+    try {
+      const parsed = JSON.parse(output);
+      res.json(parsed);
+    } catch (parseError) {
+      console.error("JSON Parse Error:", output);
+      res.status(500).json({ error: "AI returned invalid JSON format" });
+    }
 
   } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).json({ error: "Failed to process text" });
+    console.error("Backend Server Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-// CRITICAL CHANGE: Use process.env.PORT for Render
+// 4. Use process.env.PORT for Render deployment
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
